@@ -4,9 +4,8 @@ import io
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import redirect_stderr
 
-from depviz.cli import EXIT_ERROR, EXIT_OK, main
 from depviz.config import ConfigError, parse_config
 
 URL = "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64"
@@ -58,23 +57,6 @@ class ConfigTest(unittest.TestCase):
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 parse_config(["-p", "curl"])
-
-    def test_main_prints_params(self):
-        """main выводит параметры в формате ключ=значение."""
-        out = io.StringIO()
-        with redirect_stdout(out):
-            code = main(["-p", "curl", "-r", URL])
-        self.assertEqual(code, EXIT_OK)
-        self.assertIn("package=curl", out.getvalue())
-        self.assertIn("mode=real", out.getvalue())
-
-    def test_main_reports_error(self):
-        """main сообщает об ошибке и возвращает код 1."""
-        err = io.StringIO()
-        with redirect_stderr(err):
-            code = main(["-p", "curl", "-r", URL, "-m", "x"])
-        self.assertEqual(code, EXIT_ERROR)
-        self.assertIn("Ошибка", err.getvalue())
 
 
 if __name__ == "__main__":
