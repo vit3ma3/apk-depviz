@@ -24,3 +24,22 @@ def bfs_levels(deps, level, graph):
 def build_graph(deps, root):
     """Вернуть граф {пакет: зависимости}, достижимый из пакета root."""
     return bfs_levels(deps, [root], {})
+
+
+def reverse_map(deps):
+    """Развернуть рёбра: {пакет: пакеты, которые от него зависят}."""
+    reverse = {}
+    for package, children in deps.items():
+        reverse.setdefault(package, [])
+        for child in children:
+            reverse.setdefault(child, []).append(package)
+    return reverse
+
+
+def reverse_dependencies(deps, package):
+    """Вернуть все пакеты, которые прямо или транзитивно зависят от package.
+
+    Используется тот же рекурсивный BFS, но по развёрнутому графу.
+    """
+    graph = build_graph(reverse_map(deps), package)
+    return [name for name in graph if name != package]

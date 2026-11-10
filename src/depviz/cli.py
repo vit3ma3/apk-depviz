@@ -4,11 +4,18 @@ import sys
 
 from depviz.apk import RepositoryError, load_repository
 from depviz.config import MODE_TEST, ConfigError, parse_config
-from depviz.graph import build_graph
+from depviz.graph import build_graph, reverse_dependencies
 from depviz.testrepo import load_test_repository
 
 EXIT_OK = 0
 EXIT_ERROR = 1
+
+
+def is_known(deps, package):
+    """Проверить, описан ли пакет или упомянут как зависимость."""
+    if package in deps:
+        return True
+    return any(package in children for children in deps.values())
 
 
 def load_dependencies(config):
@@ -17,7 +24,7 @@ def load_dependencies(config):
         deps = load_test_repository(config.repo)
     else:
         deps = load_repository(config.repo)
-    if config.package not in deps:
+    if not is_known(deps, config.package):
         raise RepositoryError(
             f"пакет '{config.package}' не найден в репозитории"
         )
@@ -30,6 +37,14 @@ def format_graph(graph):
             for name, deps in graph.items()]
 
 
+def format_reverse(deps, package):
+    """Вернуть строки со списком пакетов, зависящих от package."""
+    names = reverse_dependencies(deps, package)
+    if not names:
+        return [f"От пакета '{package}' не зависит ни один пакет"]
+    return names
+
+
 def main(argv=None):
     """Запустить приложение и вернуть код завершения."""
     try:
@@ -38,6 +53,10 @@ def main(argv=None):
     except (ConfigError, RepositoryError) as error:
         print(f"Ошибка: {error}", file=sys.stderr)
         return EXIT_ERROR
-    for line in format_graph(build_graph(deps, config.package)):
+    if config.reverse:
+        lines = format_reverse(deps, config.package)
+    else:
+        lines = format_graph(build_graph(deps, config.package))
+    for line in lines:
         print(line)
     return EXIT_OK

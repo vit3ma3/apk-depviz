@@ -2,7 +2,7 @@
 
 import unittest
 
-from depviz.graph import build_graph
+from depviz.graph import build_graph, reverse_dependencies, reverse_map
 
 
 class GraphTest(unittest.TestCase):
@@ -35,6 +35,25 @@ class GraphTest(unittest.TestCase):
         """Пакет без описания — вершина без зависимостей."""
         graph = build_graph({"A": ["F"]}, "A")
         self.assertEqual(graph, {"A": ["F"], "F": []})
+
+    def test_reverse_map(self):
+        """Рёбра разворачиваются, листья тоже попадают в словарь."""
+        deps = {"A": ["B", "C"], "B": ["C"]}
+        self.assertEqual(reverse_map(deps),
+                         {"A": [], "B": ["A"], "C": ["A", "B"]})
+
+    def test_reverse_transitive(self):
+        """Обратные зависимости включают транзитивные."""
+        deps = {"A": ["B", "C"], "B": ["D"], "C": ["D", "E"],
+                "D": [], "E": []}
+        self.assertEqual(reverse_dependencies(deps, "D"), ["B", "C", "A"])
+        self.assertEqual(reverse_dependencies(deps, "A"), [])
+
+    def test_reverse_cycle(self):
+        """В цикле пакет не попадает в собственные обратные зависимости."""
+        deps = {"A": ["B"], "B": ["C"], "C": ["A", "D"], "D": ["D"]}
+        self.assertEqual(reverse_dependencies(deps, "A"), ["C", "B"])
+        self.assertEqual(reverse_dependencies(deps, "D"), ["C", "B", "A"])
 
 
 if __name__ == "__main__":

@@ -26,19 +26,13 @@ class Config:
         package: имя анализируемого пакета.
         repo: URL репозитория или путь к файлу тестового репозитория.
         mode: режим работы с репозиторием: real или test.
+        reverse: вывести обратные зависимости вместо графа.
     """
 
     package: str
     repo: str
     mode: str
-
-    def items(self):
-        """Вернуть параметры списком пар (ключ, значение)."""
-        return [
-            ("package", self.package),
-            ("repo", self.repo),
-            ("mode", self.mode),
-        ]
+    reverse: bool = False
 
 
 def build_parser():
@@ -58,6 +52,10 @@ def build_parser():
     parser.add_argument(
         "-m", "--mode", default=MODE_REAL,
         help="режим работы с репозиторием: real (по умолчанию) или test",
+    )
+    parser.add_argument(
+        "--reverse", action="store_true",
+        help="вывести пакеты, которые зависят от заданного",
     )
     return parser
 
@@ -132,4 +130,5 @@ def parse_config(argv=None):
         package=validate_package(args.package, mode),
         repo=validate_repo(args.repo, mode),
         mode=mode,
+        reverse=args.reverse,
     )

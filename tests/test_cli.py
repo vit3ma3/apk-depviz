@@ -40,6 +40,26 @@ class CliTest(unittest.TestCase):
         self.assertEqual(out.splitlines(),
                          ["A: B", "B: C", "C: A D", "D: D"])
 
+    def test_reverse(self, _load):
+        """--reverse выводит пакеты, зависящие от заданного."""
+        code, out, _ = run(["-p", "musl", "-r", URL, "--reverse"])
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(out.split(), ["curl", "libcurl"])
+
+    def test_reverse_none(self, _load):
+        """Если зависящих пакетов нет, об этом сообщается."""
+        code, out, _ = run(["-p", "curl", "-r", URL, "--reverse"])
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("не зависит ни один пакет", out)
+
+    def test_undescribed_package(self, _load):
+        """Пакет, упомянутый только как зависимость, допустим."""
+        complex_repo = str(EXAMPLES / "complex.txt")
+        argv = ["-p", "F", "-r", complex_repo, "-m", "test", "--reverse"]
+        code, out, _ = run(argv)
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(out.split(), ["C", "A"])
+
     def test_unknown_package(self, _load):
         """Отсутствующий пакет — ошибка."""
         code, _, err = run(["-p", "nope", "-r", URL])
