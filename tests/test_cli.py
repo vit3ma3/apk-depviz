@@ -27,18 +27,25 @@ class CliTest(unittest.TestCase):
     """Проверка вывода приложения."""
 
     def test_graph(self, _load):
-        """Выводится граф с транзитивными зависимостями."""
+        """Граф с транзитивными зависимостями выводится на языке D2."""
         code, out, _ = run(["-p", "curl", "-r", URL])
         self.assertEqual(code, EXIT_OK)
-        self.assertEqual(out.splitlines(),
-                         ["curl: libcurl musl", "libcurl: musl", "musl:"])
+        self.assertEqual(out.splitlines(), [
+            "direction: right",
+            '"curl" -> "libcurl"',
+            '"curl" -> "musl"',
+            '"libcurl" -> "musl"',
+            '"musl"',
+        ])
 
     def test_test_mode(self, _load):
         """Граф строится по файлу тестового репозитория."""
         code, out, _ = run(["-p", "A", "-r", CYCLE, "-m", "test"])
         self.assertEqual(code, EXIT_OK)
-        self.assertEqual(out.splitlines(),
-                         ["A: B", "B: C", "C: A D", "D: D"])
+        self.assertEqual(out.splitlines()[1:], [
+            '"A" -> "B"', '"B" -> "C"', '"C" -> "A"', '"C" -> "D"',
+            '"D" -> "D"',
+        ])
 
     def test_reverse(self, _load):
         """--reverse выводит пакеты, зависящие от заданного."""

@@ -66,6 +66,112 @@ D:
 `cycle.txt` (цикл и петля), `complex.txt` (ромбы, общие зависимости,
 пакет без описания).
 
+## Визуализация
+
+Модуль `src/depviz/d2.py` формирует описание графа на языке диаграмм
+[D2](https://d2lang.com/), и приложение выводит его на экран:
+
+- первая строка `direction: right` — граф слева направо;
+- каждое ребро «пакет -> зависимость» — отдельная строка;
+- пакет без зависимостей объявляется отдельной строкой, чтобы граф
+  из одной вершины тоже был виден;
+- имена берутся в кавычки, поэтому допустимы `libstdc++` и подобные.
+
+Примеры для трёх пакетов репозитория
+`https://dl-cdn.alpinelinux.org/alpine/v3.20/main/aarch64`:
+`curl` (35 строк D2), `openssh-client` (41) и `python3` (40).
+Полный вывод для `python3`:
+
+```d2
+direction: right
+"python3" -> "libssl3"
+"python3" -> "libbz2"
+"python3" -> "musl"
+"python3" -> "libcrypto3"
+"python3" -> "libexpat"
+"python3" -> "libffi"
+"python3" -> "gdbm"
+"python3" -> "xz-libs"
+"python3" -> "mpdecimal"
+"python3" -> "libncursesw"
+"python3" -> "libpanelw"
+"python3" -> "readline"
+"python3" -> "sqlite-libs"
+"python3" -> "zlib"
+"libssl3" -> "libcrypto3"
+"libssl3" -> "musl"
+"libbz2" -> "musl"
+"musl"
+"libcrypto3" -> "musl"
+"libexpat" -> "musl"
+"libffi" -> "musl"
+"gdbm" -> "musl"
+"xz-libs" -> "musl"
+"mpdecimal" -> "musl"
+"mpdecimal" -> "libgcc"
+"mpdecimal" -> "libstdc++"
+"libncursesw" -> "ncurses-terminfo-base"
+"libncursesw" -> "musl"
+"libpanelw" -> "ncurses-terminfo-base"
+"libpanelw" -> "musl"
+"libpanelw" -> "libncursesw"
+"readline" -> "musl"
+"readline" -> "libncursesw"
+"sqlite-libs" -> "musl"
+"zlib" -> "musl"
+"libgcc" -> "musl"
+"libstdc++" -> "musl"
+"libstdc++" -> "libgcc"
+"ncurses-terminfo-base"
+```
+
+## Сравнение со штатным инструментом `apk dot`
+
+Штатная визуализация Alpine — команда `apk dot ПАКЕТ` (apk-tools
+2.14.4), она выводит граф на языке Graphviz. Сравнение проводилось
+в контейнере `alpine:3.20` (aarch64) только с репозиторием `main`,
+`depviz` запускался на том же репозитории:
+
+```sh
+docker run --rm alpine:3.20 sh -c '
+  echo https://dl-cdn.alpinelinux.org/alpine/v3.20/main \
+    > /etc/apk/repositories
+  apk update >/dev/null && apk dot curl'
+```
+
+Рёбра `apk dot` сравнивались с рёбрами `depviz` после удаления версий
+из имён и повторов:
+
+| Пакет | Рёбер `apk dot` | Рёбер `depviz` | Результат |
+|---|---|---|---|
+| `python3` | 37 | 37 | полностью совпадают |
+| `openssh-client` | 35 | 37 | у `depviz` на 2 ребра больше |
+| `curl` | 48 | 33 | у `apk dot` на 15 рёбер больше |
+
+Причины расхождений:
+
+1. **Альтернативные поставщики (`curl`).** `ca-certificates` зависит
+   от виртуального `/bin/sh`, который в `main` дают три пакета:
+   `busybox-binsh`, `dash-binsh`, `yash-binsh`. `apk dot` рисует всех
+   поставщиков вместе с их зависимостями (`dash`, `yash`,
+   `libncursesw`), а взаимоисключающие варианты выделяет красным.
+   `depviz` берёт первого поставщика из индекса (`busybox-binsh`):
+   именно его apk ставит по умолчанию, остальные 15 рёбер — варианты,
+   которые не устанавливаются вместе.
+2. **Виртуальный корень (`openssh-client`).** У `openssh-client` нет
+   своей записи в индексе, его предоставляют `openssh-client-default`
+   и `openssh-client-krb5`. `apk dot` сразу начинает граф с них,
+   а `depviz` добавляет вершину `openssh-client` и два ребра к ним.
+   Остальные рёбра совпадают.
+3. **Оформление.** `apk dot` пишет версии в именах
+   (`musl-1.2.5-r4`), подписывает рёбра виртуальными именами
+   (`so:libc.musl-aarch64.so.1`) и рисует повторные рёбра, если
+   зависимость указана дважды (`libcurl` и `so:libcurl.so.4`).
+   `depviz` показывает только имена пакетов и одно ребро на пару.
+4. **Архитектура.** Зависимости `so:` зависят от архитектуры
+   (`libc.musl-x86_64.so.1` и `libc.musl-aarch64.so.1`), поэтому
+   сравнивать нужно индексы одной архитектуры.
+
 ## Параметры
 
 | Опция | Описание |
@@ -97,26 +203,30 @@ make test          # запустить тесты
 
 ## Примеры использования
 
-Граф выводится строками «пакет: зависимости» в порядке обхода.
+Граф выводится на языке диаграмм D2 (см. раздел «Визуализация»).
 
-Тестовый репозиторий с циклом:
+Тестовый репозиторий с циклом и петлёй:
 
 ```sh
 $ ./run.sh -p A -r examples/cycle.txt -m test
-A: B
-B: C
-C: A D
-D: D
+direction: right
+"A" -> "B"
+"B" -> "C"
+"C" -> "A"
+"C" -> "D"
+"D" -> "D"
 ```
 
 Подграф с середины графа:
 
 ```sh
 $ ./run.sh -p G -r examples/complex.txt -m test
-G: H B
-H:
-B: E
-E: H
+direction: right
+"G" -> "H"
+"G" -> "B"
+"H"
+"B" -> "E"
+"E" -> "H"
 ```
 
 Обратные зависимости: кто зависит от `D` в простом дереве, от `A`
@@ -140,15 +250,20 @@ $ ./run.sh -p A -r examples/simple.txt -m test --reverse
 От пакета 'A' не зависит ни один пакет
 ```
 
-Реальный репозиторий:
+Реальный репозиторий и построение картинки
+(нужен [d2](https://d2lang.com/)):
 
 ```sh
 $ ./run.sh -p curl -r https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64
-curl: libcurl musl zlib
-libcurl: ca-certificates brotli-libs musl c-ares libcrypto3 libidn2 ...
-musl:
-zlib: musl
+direction: right
+"curl" -> "libcurl"
+"curl" -> "musl"
+"curl" -> "zlib"
+"libcurl" -> "ca-certificates"
 ...
+
+$ ./run.sh -p curl -r https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64 > curl.d2
+$ d2 --layout=elk curl.d2 curl.svg
 ```
 
 Ошибки:

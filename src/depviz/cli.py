@@ -4,6 +4,7 @@ import sys
 
 from depviz.apk import RepositoryError, load_repository
 from depviz.config import MODE_TEST, ConfigError, parse_config
+from depviz.d2 import to_d2
 from depviz.graph import build_graph, reverse_dependencies
 from depviz.testrepo import load_test_repository
 
@@ -31,12 +32,6 @@ def load_dependencies(config):
     return deps
 
 
-def format_graph(graph):
-    """Вернуть строки «пакет: зависимости» в порядке обхода."""
-    return [f"{name}: {' '.join(deps)}".rstrip()
-            for name, deps in graph.items()]
-
-
 def format_reverse(deps, package):
     """Вернуть строки со списком пакетов, зависящих от package."""
     names = reverse_dependencies(deps, package)
@@ -56,7 +51,7 @@ def main(argv=None):
     if config.reverse:
         lines = format_reverse(deps, config.package)
     else:
-        lines = format_graph(build_graph(deps, config.package))
+        lines = to_d2(build_graph(deps, config.package))
     for line in lines:
         print(line)
     return EXIT_OK
