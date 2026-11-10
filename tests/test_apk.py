@@ -36,6 +36,17 @@ P:zlib
 V:1.3.1-r1
 D:so:libc.musl-x86_64.so.1 zlib>=1.0
 p:so:libz.so.1=1.3.1
+
+P:ssh-default
+D:so:libz.so.1 !ssh-krb5
+p:ssh-client=1 cmd:ssh=1
+
+P:ssh-krb5
+D:so:libz.so.1 !ssh-default
+p:ssh-client=1 cmd:ssh=1
+
+P:git
+D:ssh-client cmd:ssh
 """
 
 
@@ -74,6 +85,13 @@ class ApkTest(unittest.TestCase):
                          ["musl", "zlib", "ca-certificates-bundle"])
         self.assertEqual(deps["musl"], [])
         self.assertEqual(deps["zlib"], ["musl"])
+
+    def test_named_virtual(self):
+        """Именованное виртуальное имя — вершина со всеми поставщиками."""
+        deps = build_dependency_map(parse_index(INDEX))
+        self.assertEqual(deps["ssh-client"], ["ssh-default", "ssh-krb5"])
+        self.assertEqual(deps["git"], ["ssh-client", "ssh-default"])
+        self.assertNotIn("cmd:ssh", deps)
 
     def test_extract_index(self):
         """Текст индекса извлекается из архива."""

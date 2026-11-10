@@ -79,28 +79,48 @@ def dependency_name(token):
     return token
 
 
+def is_named_virtual(name):
+    """Проверить, что виртуальное имя — имя пакета, а не so:, cmd: или путь.
+
+    Такие имена (например openssh-client) становятся отдельной
+    вершиной графа, зависящей от всех пакетов, которые их дают.
+    """
+    return ":" not in name and not name.startswith("/")
+
+
 def build_providers(records):
-    """Сопоставить каждое имя (и виртуальное) пакету, который его даёт."""
-    providers = {record[FIELD_NAME]: record[FIELD_NAME] for record in records}
+    """Сопоставить каждому виртуальному имени список пакетов-поставщиков."""
+    providers = {}
     for record in records:
         for token in record.get(FIELD_PROVIDES, "").split():
-            providers.setdefault(dependency_name(token), record[FIELD_NAME])
+            owners = providers.setdefault(dependency_name(token), [])
+            if record[FIELD_NAME] not in owners:
+                owners.append(record[FIELD_NAME])
     return providers
 
 
-def resolve_dependencies(record, providers):
+def resolve_name(name, packages, providers):
+    """Вернуть вершину графа для имени из поля D.
+
+    Имена so:, cmd:, pc: и пути заменяются первым поставщиком.
+    Настоящие пакеты, именованные виртуальные имена и неизвестные имена
+    (их даёт пакет из другого репозитория) остаются как есть.
+    """
+    if name in packages or is_named_virtual(name):
+        return name
+    return providers.get(name, [name])[0]
+
+
+def resolve_dependencies(record, packages, providers):
     """Вернуть имена пакетов, от которых напрямую зависит запись.
 
-    Конфликты (!имя) пропускаются, виртуальные имена заменяются
-    пакетом, который их предоставляет. Неизвестные имена остаются
-    как есть: их даёт пакет из другого репозитория.
+    Конфликты (!имя) и зависимость от самого себя пропускаются.
     """
     result = []
     for token in record.get(FIELD_DEPENDS, "").split():
         if token.startswith(CONFLICT_PREFIX):
             continue
-        name = dependency_name(token)
-        package = providers.get(name, name)
+        package = resolve_name(dependency_name(token), packages, providers)
         if package != record[FIELD_NAME] and package not in result:
             result.append(package)
     return result
@@ -109,11 +129,16 @@ def resolve_dependencies(record, providers):
 def build_dependency_map(records):
     """Построить словарь {пакет: список прямых зависимостей}."""
     providers = build_providers(records)
+    packages = {record[FIELD_NAME] for record in records}
     deps = {}
     for record in records:
         deps.setdefault(
-            record[FIELD_NAME], resolve_dependencies(record, providers)
+            record[FIELD_NAME],
+            resolve_dependencies(record, packages, providers),
         )
+    for name, owners in providers.items():
+        if is_named_virtual(name) and name not in deps:
+            deps[name] = owners
     return deps
 
 
