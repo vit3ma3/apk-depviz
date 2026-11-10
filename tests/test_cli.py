@@ -3,11 +3,14 @@
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 from depviz.cli import EXIT_ERROR, EXIT_OK, main
 
 URL = "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64"
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+CYCLE = str(EXAMPLES / "cycle.txt")
 REPO = {"curl": ["libcurl", "musl"], "libcurl": ["musl"], "musl": []}
 
 
@@ -23,11 +26,19 @@ def run(argv):
 class CliTest(unittest.TestCase):
     """Проверка вывода приложения."""
 
-    def test_direct_dependencies(self, _load):
-        """Выводятся прямые зависимости пакета."""
+    def test_graph(self, _load):
+        """Выводится граф с транзитивными зависимостями."""
         code, out, _ = run(["-p", "curl", "-r", URL])
         self.assertEqual(code, EXIT_OK)
-        self.assertEqual(out.split(), ["libcurl", "musl"])
+        self.assertEqual(out.splitlines(),
+                         ["curl: libcurl musl", "libcurl: musl", "musl:"])
+
+    def test_test_mode(self, _load):
+        """Граф строится по файлу тестового репозитория."""
+        code, out, _ = run(["-p", "A", "-r", CYCLE, "-m", "test"])
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(out.splitlines(),
+                         ["A: B", "B: C", "C: A D", "D: D"])
 
     def test_unknown_package(self, _load):
         """Отсутствующий пакет — ошибка."""
