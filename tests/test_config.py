@@ -14,14 +14,12 @@ URL = "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64"
 class ConfigTest(unittest.TestCase):
     """Проверка опций командной строки."""
 
-    def setUp(self):
-        """Создать временный файл тестового репозитория."""
-        handle, self.path = tempfile.mkstemp()
+    def make_repo_file(self):
+        """Создать временный файл репозитория, удаляемый после теста."""
+        handle, path = tempfile.mkstemp()
         os.close(handle)
-
-    def tearDown(self):
-        """Удалить временный файл."""
-        os.remove(self.path)
+        self.addCleanup(os.remove, path)
+        return path
 
     def test_real_mode(self):
         """Корректные параметры реального режима."""
@@ -31,15 +29,17 @@ class ConfigTest(unittest.TestCase):
 
     def test_test_mode(self):
         """Корректные параметры тестового режима."""
-        config = parse_config(["-p", "A", "-r", self.path, "-m", "test"])
-        self.assertEqual(config.repo, self.path)
+        path = self.make_repo_file()
+        config = parse_config(["-p", "A", "-r", path, "-m", "test"])
+        self.assertEqual(config.repo, path)
 
     def test_errors(self):
         """Каждый неверный параметр даёт ConfigError."""
+        path = self.make_repo_file()
         cases = [
             ["-p", " ", "-r", URL],
             ["-p", "bad name", "-r", URL],
-            ["-p", "a", "-r", self.path, "-m", "test"],
+            ["-p", "a", "-r", path, "-m", "test"],
             ["-p", "curl", "-r", "ftp://host/repo"],
             ["-p", "curl", "-r", "https://"],
             ["-p", "curl", "-r", ""],
